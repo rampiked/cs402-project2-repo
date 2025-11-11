@@ -1,13 +1,23 @@
+/*================================
+CS 402 - Project #2:
+Author : Matt Sagat
+Date   : 11/11/2025
+================================*/
+
 //Included with Github Release
 #include <functional>
 #include <limits.h>
 #include <random>
 #include <iostream>
+
 //Added by Matt
 #include <vector>
 #include <unordered_map>
+#include <queue>
+#include <cmath>
+#include <algorithm>
 
-// be sure to change Matt and Sagat with your own first and last name
+//be sure to change Matt and Sagat with your own first and last name
 #include "Matt_Sagat_project2.h"
 
 using namespace std;
@@ -85,13 +95,13 @@ unsigned short test_hash(unsigned int input) {
     return static_cast<unsigned short>(a*input + b);
 }
 
-// Do not modify this function signature. 
+//Do not modify this function signature. 
 vector<unsigned int> birthday_attack_1(function<unsigned short(unsigned int)> hash_function) {
-    const int TRIALS = 3;     // small constant number of times (>= 2)
-    const int SAMPLES = 350;  // samples per trial
+    const int TRIALS = 3;     //small constant number of times (>= 2)
+    const int SAMPLES = 350;  //samples per trial
 
     for (int t = 0; t < TRIALS; ++t) {
-        unordered_map<unsigned short, unsigned int> seen; // map hash -> input that produced it
+        unordered_map<unsigned short, unsigned int> seen; //map hash -> input that produced it
         seen.reserve(SAMPLES * 2);
 
         for (int i = 0; i < SAMPLES; ++i) {
@@ -100,7 +110,7 @@ vector<unsigned int> birthday_attack_1(function<unsigned short(unsigned int)> ha
 
             auto it = seen.find(h);
             if (it != seen.end()) {
-                // collision found: h(it->second) == h(x)
+                //collision found: h(it->second) == h(x)
                 return vector<unsigned int>{ it->second, x };
             }
 
@@ -108,7 +118,7 @@ vector<unsigned int> birthday_attack_1(function<unsigned short(unsigned int)> ha
         }
     }
 
-    // no collision found after all trials
+    //no collision found after all trials
     return vector<unsigned int>{};
 }
 
@@ -165,12 +175,12 @@ vector<unsigned int> birthday_attack_2(function<unsigned short(unsigned int)> ha
     // signatures match the `test_hash` function signature.
     
     // Your code here!
-    // Map everything into 16-bit space
+    //Map everything into 16-bit space
     auto f = [&](unsigned int x) -> unsigned int {
         return hash_function(x);
     };
 
-    // Phase 1: find meeting point
+    //Phase 1: find meeting point
     unsigned int tort = f(0);
     unsigned int hare = f(f(0));
     while (tort != hare) {
@@ -178,17 +188,17 @@ vector<unsigned int> birthday_attack_2(function<unsigned short(unsigned int)> ha
         hare = f(f(hare));
     }
 
-    // Phase 2: find start of cycle
+    //Phase 2: find start of cycle
     unsigned int tort2 = 0;
     while (tort2 != hare) {
         tort2 = f(tort2);
         hare = f(hare);
     }
 
-    // Now tort2 == hare is a *value* in the cycle.
-    // Find two *different inputs* that hash to this same value.
+    //Now tort2 == hare is a *value* in the cycle.
+    //Find two *different inputs* that hash to this same value.
 
-    // We'll walk until we find two inputs mapping to the same hash value.
+    //Walk until we find two inputs mapping to the same hash value.
     unordered_map<unsigned short, unsigned int> seen;
     unsigned int x = 0;
     for (int i = 0; i < 100000; ++i) {
@@ -201,10 +211,9 @@ vector<unsigned int> birthday_attack_2(function<unsigned short(unsigned int)> ha
         x = f(x);
     }
 
-    // fallback (shouldn’t happen)
+    //fallback
     return {};
 }
-
 
 /*** PART 2: Graphs ***/
 
@@ -232,10 +241,50 @@ vector<unsigned int> birthday_attack_2(function<unsigned short(unsigned int)> ha
 
 
 vector<int> topological_sort(int n, vector<Edge> edges) {
-    // Your code here!
-    vector<int> vecToReturn;
-    return vecToReturn;
+    //adjacency list and indegree counter
+    vector<vector<int>> adj(n);
+    vector<int> indegree(n, 0);
+
+    //Build graph
+    for (const auto &e : edges) {
+        adj[e.from].push_back(e.to);
+        indegree[e.to]++;
+    }
+
+    //Queue (or vector used as queue) for nodes with indegree 0
+    vector<int> order;
+    vector<int> zero_indegree;
+    zero_indegree.reserve(n);
+
+    for (int i = 0; i < n; ++i) {
+        if (indegree[i] == 0) {
+            zero_indegree.push_back(i);
+        }
+    }
+
+    //Process all vertices with indegree 0
+    while (!zero_indegree.empty()) {
+        int u = zero_indegree.back();
+        zero_indegree.pop_back(); //using as stack or queue both fine
+        order.push_back(u);
+
+        //Decrease indegree for neighbors
+        for (int v : adj[u]) {
+            indegree[v]--;
+            if (indegree[v] == 0) {
+                zero_indegree.push_back(v);
+            }
+        }
+    }
+
+    //If all nodes are processed, return order; else, there’s a cycle
+    if ((int)order.size() == n) {
+        return order;
+    } else {
+        return {}; //cycle detected
+    }
 }
+
 
 
 /* Single Source Shortest Paths on DAGs
@@ -266,8 +315,27 @@ vector<int> topological_sort(int n, vector<Edge> edges) {
  *
  */
 vector<int> dag_single_source(int n, vector<Edge> edges, int source) {
-    vector<int> vecToReturn;
-    return vecToReturn;
+    //Step 1: Get topological order
+    vector<int> topo_order = topological_sort(n, edges);
+
+    //Step 2: Initialize distances
+    vector<int> dist(n, INT_MAX);
+    dist[source] = 0;
+
+    //Step 3: Relax edges in topological order
+    for (int u : topo_order) {
+        if (dist[u] == INT_MAX) continue; //skip unreachable nodes
+        for (const Edge& e : edges) {
+            if (e.from == u && dist[u] != INT_MAX) {
+                if (dist[u] + e.weight < dist[e.to]) {
+                    dist[e.to] = dist[u] + e.weight;
+                }
+            }
+        }
+    }
+
+    //Step 4: Return distances
+    return dist;
 }
 
 
@@ -303,8 +371,46 @@ vector<Node> dijkstras_algorithm(int n, vector<Edge> edges, int source) {
     // Your code here!
     // Note: see the LeetCode from in-class for the problem "Cheapest Flights
     // K stops" to see how you can create a priority_queue with the Node struct.
-    vector<Node> vecToReturn;
-    return vecToReturn;
+    // Initialize graph nodes
+    vector<Node> graph(n);
+    for (int i = 0; i < n; ++i) {
+        graph[i].id = i;
+        graph[i].path_cost = INT_MAX; //infinity
+        graph[i].pred = -1;           //no predecessor yet
+    }
+
+    //Build adjacency list (neighbors with weights)
+    vector<vector<pair<int,int>>> adj(n);
+    for (Edge e : edges) {
+        adj[e.from].push_back({e.to, e.weight});
+    }
+
+    //Min-priority queue for Dijkstra: sorts by path_cost automatically via operator<
+    priority_queue<Node, vector<Node>, greater<Node>> pq;
+
+    //Start at source
+    graph[source].path_cost = 0;
+    pq.push(graph[source]);
+
+    while (!pq.empty()) {
+        Node curr = pq.top();
+        pq.pop();
+
+        //If the current cost is already larger than the recorded cost, skip
+        if (curr.path_cost > graph[curr.id].path_cost) continue;
+
+        //Explore neighbors
+        for (auto [neighbor_id, weight] : adj[curr.id]) {
+            int new_cost = curr.path_cost + weight;
+            if (new_cost < graph[neighbor_id].path_cost) {
+                graph[neighbor_id].path_cost = new_cost;
+                graph[neighbor_id].pred = curr.id;
+                pq.push(graph[neighbor_id]);
+            }
+        }
+    }
+
+    return graph;
 }
 
 
@@ -403,8 +509,15 @@ vector<Node> dijkstras_algorithm(int n, vector<Edge> edges, int source) {
 
 // You must implement this function.
 double heuristic_cost(GridNode start, GridNode dest) {
-    // Your code here!
-    return 0.0;
+    int dx = abs(dest.x - start.x);
+    int dy = abs(dest.y - start.y);
+
+    //Diagonal moves cost 1.5, straight moves cost 1
+    int minD = std::min(dx, dy);
+    int maxD = std::max(dx, dy);
+
+    //Optimal path: use diagonals for min(dx, dy), then straight moves for the remainder
+    return 1.5 * minD + 1.0 * (maxD - minD);
 }
 
 // To test your algorithm with the function "heruistic_cost" above,
@@ -421,50 +534,74 @@ vector<GridNode> a_star_algorithm(
     // Your code here!
     // Be sure to use "h" from the inputs in your implementation; do not
     // directly use "heruistic_cost" above!
-    vector<GridNode> vecToReturn;
-    return vecToReturn;
-}
+    //Map from (x,y) to neighbors
+    unordered_map<int, unordered_map<int, vector<pair<GridNode,double>>>> graph;
+    for(auto &e: edges) {
+        graph[e.from_x][e.from_y].push_back({{e.to_x, e.to_y, 0.0, -1, -1}, 
+                                            (e.to_x != e.from_x && e.to_y != e.from_y) ? 1.5 : 1.0});
+    }
 
-unsigned short weak_hash(unsigned int input) {
-    // drops more bits, ensuring many collisions
-    return static_cast<unsigned short>((input * 7919 + 12345) >> 3);
+    auto key = [](int x, int y) { return x * 100000 + y; }; //unique key for visited
+    unordered_map<int, double> g_cost; //cost from source to node
+    unordered_map<int, pair<int,int>> pred; //predecessor map
+
+    //Min-heap priority queue with cost + heuristic
+    auto cmp = [&](const GridNode &a, const GridNode &b) { return a.path_cost > b.path_cost; };
+    priority_queue<GridNode, vector<GridNode>, decltype(cmp)> pq(cmp);
+
+    source.path_cost = 0.0;
+    source.pred_x = -1;
+    source.pred_y = -1;
+    pq.push(source);
+    g_cost[key(source.x, source.y)] = 0.0;
+
+    while(!pq.empty()) {
+        //Take the node with the smallest estimated total cost (f = g + h)
+        GridNode curr = pq.top(); 
+        pq.pop();
+
+        //If we have reached the target, reconstruct the path from source to target
+        if(curr.x == target.x && curr.y == target.y) {
+            vector<GridNode> path;
+            GridNode node = curr;
+            //Follow the predecessor chain backwards from target to source
+            while(node.pred_x != -1 && node.pred_y != -1) {
+                path.push_back(node);
+                int px = node.pred_x, py = node.pred_y;
+                //Reconstruct the node using g_cost (actual cost from source)
+                node = {px, py, g_cost[key(px,py)], -1, -1};
+            }
+            //Add the source node at the beginning
+            path.push_back(source);
+            //Reverse the path so that it goes from source to target
+            reverse(path.begin(), path.end());
+            return path;
+        }
+
+        //Expand all neighbors of the current node
+        for(auto &nei : graph[curr.x][curr.y]) {
+            GridNode neighbor = nei.first;  //Neighbor node
+            double move_cost = nei.second;   //Cost to move from current to neighbor
+            int k = key(neighbor.x, neighbor.y); //Unique key for this neighbor
+
+            //Tentative g cost: actual cost from source to this neighbor via current
+            double tentative_g = curr.path_cost + move_cost;
+
+            //If this neighbor has not been visited yet, or we found a cheaper path
+            if(!g_cost.count(k) || tentative_g < g_cost[k]) {
+                g_cost[k] = tentative_g;  //Ipdate g cost
+                neighbor.path_cost = tentative_g + h(neighbor, target); //f = g + h
+                neighbor.pred_x = curr.x; //Store predecessor for path reconstruction
+                neighbor.pred_y = curr.y;
+                pq.push(neighbor); //Add neighbor to priority queue for future expansion
+            }
+        }
+    }
+
+    //No path found
+    return {};
 }
 
 int main() {
-    // Test 1: Provided test_hash
-    cout << "=== Test 1: test_hash ===" << endl;
-    auto collision1 = birthday_attack_1(test_hash);
-    if (!collision1.empty()) {
-        cout << "Collision found: " << collision1[0] << " and " << collision1[1] << endl;
-        cout << "Hashes: " << test_hash(collision1[0]) << " == " << test_hash(collision1[1]) << endl;
-    } else {
-        cout << "No collision found.\n";
-    }
-    cout << endl;
-
-    // Test 2: Floyd's tortoise & hare (birthday_attack_2)
-    cout << "=== Test 2: weak_hash (birthday_attack_2 - Floyd) ===" << endl;
-    auto collision2 = birthday_attack_2(weak_hash);
-    if (!collision2.empty()) {
-        cout << "Returned pair: " << collision2[0] << " and " << collision2[1] << endl;
-        unsigned short h0 = weak_hash(collision2[0]);
-        unsigned short h1 = weak_hash(collision2[1]);
-        cout << "Hashes: " << h0 << " and " << h1;
-        if (h0 == h1) {
-            cout << "  (match)" << endl;
-        } else {
-            cout << "  (mismatch) -- something's off" << endl;
-        }
-
-        // extra sanity: show the difference (useful when hash = x mod 65536)
-        unsigned long long diff = (collision2[0] > collision2[1]) 
-                                  ? (unsigned long long)collision2[0] - (unsigned long long)collision2[1]
-                                  : (unsigned long long)collision2[1] - (unsigned long long)collision2[0];
-        cout << "Absolute difference: " << diff << endl;
-    } else {
-        cout << "birthday_attack_2 returned empty vector (unexpected for Floyd's algorithm)\n";
-    }
-    cout << endl;
-
     return 0;
 }
